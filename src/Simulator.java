@@ -79,24 +79,15 @@ public class Simulator {
     }
 
     private void handleEvent(Event event){
-        if (event instanceof CallInitiationEvent){
-            attemptedCalls++;
+        if (event instanceof CallInitiationEvent){ // Initiating call
+                attemptedCalls++;
             if(stations[event.call.getConnectedBaseStation().getId()].hasFreeChannelForInitiation()){
                 stations[event.call.getConnectedBaseStation().getId()].addCall();
                 if (event.call.handoverEventRequired()){
-                    HandoverEvent handoverEvent = new HandoverEvent(simulationClock + event.call.getTimeLeftInBaseStation(), event.call);
-                    FEL.add(handoverEvent);
+                    addHandoverEvent(event.call);
                 }
                 else{
-                    CallTerminationEvent callTerminationEvent;
-                    if(event.call.getVelocity() < 0 && event.call.getConnectedBaseStation().getId() == 0){
-                        callTerminationEvent = new CallTerminationEvent(simulationClock + event.call.getTimeLeftInBaseStation(),event.call,"end");
-                    }
-                    else if(event.call.getConnectedBaseStation().getId() == 19){
-                        callTerminationEvent = new CallTerminationEvent(simulationClock + event.call.getTimeLeftInBaseStation(),event.call,"end");
-                    }
-                    else { callTerminationEvent = new CallTerminationEvent(simulationClock + event.call.getTimeLeftInCall(),event.call,"end");}
-                    FEL.add(callTerminationEvent);
+                    addCallTerminationEven(event.call);
                 }
             }
             else {
@@ -105,7 +96,7 @@ public class Simulator {
             }
         }
 
-        if (event instanceof CallTerminationEvent) {
+        if (event instanceof CallTerminationEvent) { // Termination of call
             switch (((CallTerminationEvent) event).type) {
                 case "Blocked":
                     blockedCallCount++;
@@ -117,8 +108,7 @@ public class Simulator {
             event.call.connectedBaseStation.removeCall();
         }
 
-        if (event instanceof HandoverEvent){
-
+        if (event instanceof HandoverEvent){ // Handover of call
             if(((HandoverEvent) event).nextBaseStation.hasFreeChannelForHandover()){
                 ((HandoverEvent) event).nextBaseStation.addCall();
                 event.call.setTimeLeftInCall(event.call.getTimeLeftInCall() - event.call.getTimeLeftInBaseStation());
@@ -132,19 +122,10 @@ public class Simulator {
                 event.call.connectedBaseStation.removeCall();
                 event.call.setConnectedBaseStation(((HandoverEvent) event).nextBaseStation);
                 if (event.call.handoverEventRequired()){
-                    HandoverEvent handoverEvent = new HandoverEvent(simulationClock + event.call.getTimeLeftInBaseStation(), event.call);
-                    FEL.add(handoverEvent);
+                    addHandoverEvent(event.call);
                 }
                 else{
-                    CallTerminationEvent callTerminationEvent;
-                    if(event.call.getVelocity() < 0 && event.call.getConnectedBaseStation().getId() == 0){
-                        callTerminationEvent = new CallTerminationEvent(simulationClock + event.call.getTimeLeftInBaseStation(),event.call,"end");
-                    }
-                    else if(event.call.getConnectedBaseStation().getId() == 19){
-                        callTerminationEvent = new CallTerminationEvent(simulationClock + event.call.getTimeLeftInBaseStation(),event.call,"end");
-                    }
-                    else { callTerminationEvent = new CallTerminationEvent(simulationClock + event.call.getTimeLeftInCall(),event.call,"end");}
-                    FEL.add(callTerminationEvent);
+                    addCallTerminationEven(event.call);
                 }
             }
             else {
@@ -154,6 +135,19 @@ public class Simulator {
         }
     }
 
+    private void addHandoverEvent(Call call){
+        HandoverEvent handoverEvent = new HandoverEvent(simulationClock + call.getTimeLeftInBaseStation(), call);
+        FEL.add(handoverEvent);
+    }
+
+    private void addCallTerminationEven(Call call){
+        CallTerminationEvent callTerminationEvent;
+        if( call.getConnectedBaseStation().getId() == 0 || call.getConnectedBaseStation().getId() == 19){
+            callTerminationEvent = new CallTerminationEvent(simulationClock + call.getTimeLeftInBaseStation(),call,"end");
+        }
+        else { callTerminationEvent = new CallTerminationEvent(simulationClock + call.getTimeLeftInCall(),call,"end");}
+        FEL.add(callTerminationEvent);
+    }
 
     public void readInData(String filePath){
         String line;
@@ -185,8 +179,8 @@ public class Simulator {
         FileWriter csvWriter = new FileWriter("SimOutputMode" + String.valueOf(mode) + ".csv");
         csvWriter.append("Simulation Number" + "," + "Number Of Calls" + "," + "Number Of Dropped Calls" + "," + "Number Of Blocked Calls");
         csvWriter.append("\n");
-        for (int i = 0; i < simNumber; i++){
-            System.out.println("Simulation #: "+ (i + 1));
+        for (int i = 1; i <= simNumber; i++){
+            System.out.println("Simulation #: "+ (i));
             sim.init(mode);
             sim.warmUp(500);
             sim.attemptedCalls = 0;
@@ -194,7 +188,7 @@ public class Simulator {
             System.out.println("Number of calls: "+ sim.attemptedCalls);
             System.out.println("Number of dropped calls: " + sim.droppedCallCount);
             System.out.println("Number of blocked calls: " + sim.blockedCallCount);
-            csvWriter.append(String.valueOf(i + 1)).append(",").append(String.valueOf(sim.attemptedCalls)).append(",").append(String.valueOf(sim.droppedCallCount)).append(",").append(String.valueOf(sim.blockedCallCount));
+            csvWriter.append(String.valueOf(i)).append(",").append(String.valueOf(sim.attemptedCalls)).append(",").append(String.valueOf(sim.droppedCallCount)).append(",").append(String.valueOf(sim.blockedCallCount));
             csvWriter.append("\n");
             int droppedCallsWarmDownOffset = sim.droppedCallCount;
             int blockedCallsWarmDownOffset = sim.blockedCallCount;
