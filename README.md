@@ -4,7 +4,7 @@ Improved discrete-event simulator I made for an assignment at Nanyang Techologic
 ## Improvements
 [x] Remove redundant duplicated code segments.  
 [] Add deterministic operation mode.  
-[] Improve output data file format. 
+[] Improve output data file format.   
 [] Add output analysis.   
 [] Add graphical user interface.  
 [] Add animations of simulations.
