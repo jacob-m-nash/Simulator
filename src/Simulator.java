@@ -1,14 +1,12 @@
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
+import java.text.SimpleDateFormat;
 
 public class Simulator {
 
     private PriorityQueue<Event> FEL;
     private double simulationClock;
-    private int attemptedCalls,blockedCallCount, droppedCallCount = 0;
+    private int attemptedCalls,blockedCallCount, droppedCallCount, numberOfEvents = 0;
     private NumberGenerator numberGenerator = new NumberGenerator();
 
 
@@ -19,6 +17,7 @@ public class Simulator {
         attemptedCalls = 0;
         blockedCallCount = 0;
         droppedCallCount = 0;
+        numberOfEvents = 0;
         stations = new BaseStation[20];
         FEL = new PriorityQueue<>(eventComparator);
         for(int i = 0; i < 20; i ++){
@@ -125,8 +124,9 @@ public class Simulator {
         FEL.add(callTerminationEvent);
     }
 
-    public void deterministicMode(String filePath){
+    public int deterministicMode(String filePath){
         String line;
+        int expectedNumberOfCalls = 0;
         try{
             BufferedReader br = new BufferedReader(new FileReader(filePath));
             br.readLine();
@@ -136,6 +136,7 @@ public class Simulator {
                 Call call= new Call(Double.parseDouble(data[1]),Double.parseDouble(data[3]),stations[Integer.parseInt(data[2]) - 1],Double.parseDouble(data[4]),numberGenerator.positionInBaseStation());
                 Event event = new CallInitiationEvent(call.getCallStartTime(), call);
                 FEL.add(event);
+                expectedNumberOfCalls = FEL.size();
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -144,7 +145,9 @@ public class Simulator {
             Event event = FEL.poll();
             simulationClock = event.getEventTime();
             handleEvent(event);
+            numberOfEvents++;
         }
+        return expectedNumberOfCalls;
     }
 
     private void stochasticMode(int numberOfCalls, int warmUpPeriod){
@@ -161,7 +164,8 @@ public class Simulator {
             Event event = FEL.poll();
             simulationClock = event.getEventTime();
             handleEvent(event);
-            if (event instanceof CallInitiationEvent){
+            numberOfEvents++;
+            if (event instanceof CallTerminationEvent){
                 if((event.call.getId() % (numberOfCalls + warmUpPeriod) == 0)){
                     return;
                 }
@@ -170,28 +174,45 @@ public class Simulator {
     }
 
     public static void main(String[] args) throws IOException {
-        FileWriter csvWriter = new FileWriter("SimulationOutput" +".csv");
-        csvWriter.append("Simulation Number" + "," + "Number Of Calls" + "," + "Number Of Dropped Calls" + "," + "Number Of Blocked Calls");
-        csvWriter.append("\n");
         Simulator sim = new Simulator();
         Scanner input = new Scanner(System.in);
-        System.out.println("Simulation modes: \n 1.  Stochastic\n 2. Deterministic");
+        System.out.println("Enter output file name:");
+        String outputFileName = input.nextLine();
+        File outputFile = new File("output/" + outputFileName + ".csv");
+        if(outputFile.exists()){
+            System.out.println("File already exists. 1. Delete  2. Append");
+            if (input.nextInt() == 1){
+                outputFile.delete();
+            }
+        }
+        FileWriter csvWriter = new FileWriter(outputFile);
+        csvWriter.append("\n");
+        System.out.println("Simulation modes: \n 1. Deterministic\n 2. Stochastic");
         System.out.println("Please enter the simulation mode:");
-        int simMode = input.nextInt();
-        System.out.println("Base station modes: \n 1. No reserved channels\n 2. One reserved channel");
-        System.out.println("Please enter Base Station Mode:");
-        int baseStationMode = input.nextInt();
-        int numberOfSimulations = 1;
-        if(simMode == 1){
-            sim.init(baseStationMode);
-            System.out.println("Please enter the csv file path for the deterministic simulation");
-            String filePath = input.nextLine();
-            sim.deterministicMode(filePath);
-            System.out.println("Number of calls: "+ sim.attemptedCalls);
-            System.out.println("Number of dropped calls: " + sim.droppedCallCount);
-            System.out.println("Number of blocked calls: " + sim.blockedCallCount);
-            csvWriter.append(String.valueOf(numberOfSimulations)).append(",").append(String.valueOf(sim.attemptedCalls)).append(",").append(String.valueOf(sim.droppedCallCount)).append(",").append(String.valueOf(sim.blockedCallCount));
-            csvWriter.append("\n");
+            int simMode = input.nextInt();
+            System.out.println("Base station modes: \n 1. No reserved channels\n 2. One reserved channel");
+            System.out.println("Please enter Base Station Mode:");
+            int baseStationMode = input.nextInt();
+            int numberOfSimulations = 1;
+            Date startTime = new Date();
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+            String strStartTime = formatter.format(startTime);
+            csvWriter.append("Simulation Number" + "," + "Simulation Type"+ "," + "Base Station Mode" + ","
+                    + "Expected Number Of Calls" + "," + "Number Of Calls" + "," + "Number Of Dropped Calls" + ","
+                    + "Number Of Blocked Calls" + "," + "Simulation Start Time" + "," + "Simulation Finish Time" + ","
+                    + "Number Of Events");
+            if(simMode == 1){
+                sim.init(baseStationMode);
+                System.out.println("Please enter the csv file path for the deterministic simulation");
+                String filePath = input.nextLine();
+                int expectedNumberOfCalls = sim.deterministicMode(filePath);
+                Date finishTime = new Date();
+                String strFinishTime = formatter.format(finishTime);
+                csvWriter.append(String.valueOf(numberOfSimulations)).append(",Deterministic,").append(String.valueOf(baseStationMode))
+                        .append(",").append(String.valueOf(expectedNumberOfCalls)).append(",").append(String.valueOf(sim.attemptedCalls))
+                        .append(",").append(String.valueOf(sim.droppedCallCount)).append(",").append(String.valueOf(sim.blockedCallCount))
+                        .append(",").append(strStartTime).append(",").append(strFinishTime).append(",").append(String.valueOf(sim.numberOfEvents));
+                csvWriter.append("\n");
         }
         if (simMode == 2) {
             System.out.println("Please enter number of simulations:");
@@ -203,10 +224,12 @@ public class Simulator {
                 sim.init(baseStationMode);
                 sim.warmUp(500);
                 sim.stochasticMode(numberOfCalls ,500);
-                System.out.println("Number of calls: "+ sim.attemptedCalls);
-                System.out.println("Number of dropped calls: " + sim.droppedCallCount);
-                System.out.println("Number of blocked calls: " + sim.blockedCallCount);
-                csvWriter.append(String.valueOf(i)).append(",").append(String.valueOf(sim.attemptedCalls)).append(",").append(String.valueOf(sim.droppedCallCount)).append(",").append(String.valueOf(sim.blockedCallCount));
+                Date finishTime = new Date();
+                String strFinishTime = formatter.format(finishTime);
+                csvWriter.append(String.valueOf(i)).append(",Stochastic,").append(String.valueOf(baseStationMode))
+                        .append(",").append(String.valueOf(numberOfCalls)).append(",").append(String.valueOf(sim.attemptedCalls))
+                        .append(",").append(String.valueOf(sim.droppedCallCount)).append(",").append(String.valueOf(sim.blockedCallCount))
+                        .append(",").append(strStartTime).append(",").append(strFinishTime).append(",").append(String.valueOf(sim.numberOfEvents));
                 csvWriter.append("\n");
                 int droppedCallsWarmDownOffset = sim.droppedCallCount;
                 int blockedCallsWarmDownOffset = sim.blockedCallCount;
